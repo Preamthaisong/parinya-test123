@@ -1,0 +1,45 @@
+
+# WORK IN PROGRESS - DO NOT USE THIS PLAYBOOK.
+# NOTE FOR EC2: Replace variable as below in order to make this playbook works. This will prevent EC2 to use its public IP which cannot be accessed by itself.
+---
+- hosts: artifactory_servers
+  collections:
+    - jfrog.platform
+  roles:
+    - postgres
+    - artifactory
+  vars:
+    # Pick the Artifactory flavour to install, can be also cpp-ce, jcr, pro. -- For Container Registry, enable JCR.
+    artifactory_flavour: jcr
+
+    # Override IP Endpoint to use Private IP on EC2: {{ ansible_facts['nodename'] }}
+    artifactory_extra_java_opts: -server -Xms512m -Xmx2g -Xss256k -XX:+UseG1GC
+    artifactory_db_url: >-
+        {%- for item in groups['postgres_servers'] -%}
+            jdbc:postgresql://{{ ansible_facts['nodename'] }}:5432/{{ artifactory_db_name }}
+        {%- endfor -%}
+
+    # Provide systemyaml content below with 2-space indentation
+    artifactory_systemyaml: |-
+      configVersion: 1
+      shared:
+        security:
+          joinKey: "{{ join_key }}"
+        extraJavaOpts: "{{ artifactory_extra_java_opts }}"
+        node:
+          id: {{ ansible_hostname }}
+          ip: {{ ansible_facts['default_ipv4']['address'] }}
+          taskAffinity: {{ artifactory_taskAffinity }}
+          haEnabled: {{ artifactory_ha_enabled }}
+        database:
+          type: "{{ artifactory_db_type }}"
+          driver: "{{ artifactory_db_driver }}"
+          url: "{{ artifactory_db_url }}"
+          username: "{{ artifactory_db_user }}"
+          password: "{{ artifactory_db_password }}"
+      router:
+        entrypoints:
+          internalPort: 8046
+
+    # Note: artifactory_systemyaml_override is by default false,  if you want to change default artifactory_systemyaml
+    artifactory_systemyaml_override: true
